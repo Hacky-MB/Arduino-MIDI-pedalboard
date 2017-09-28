@@ -1,45 +1,72 @@
-#define MIDI_CHANNEL 144
-#define NOTE 77
-#define MAX_VELOCITY 127
+#define MIDI_CHANNEL  144
+#define ANALOG_CHANNEL  159
+#define MAX_VELOCITY  127
 
-#define BUTTON_INPUT_DELAY_MS 200
+#define BUTTON_INPUT_DELAY_MS 100
 
-#define BUTTON_PIN 2
+#define BUTTON_COUNT  6
 
-bool note = false;
+int button_pin[] =  {9, 8, 7, 6, 4, 3};
+int button_note[] = {77, 78, 79, 80, 81, 82};
+bool event_handled[BUTTON_COUNT] = {false};
+
+#define ANALOG_PIN    13
+
+int last_analog_value = 0;
   
-void setup() {
+void setup() 
+{
     Serial.begin(31250);
-    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    for (int i = 0; i < BUTTON_COUNT; i++)
+        pinMode(button_pin[i], INPUT_PULLUP);
 }
 
-bool button_pushed()
+bool button_pushed(int pin_number)
 {
-    return !digitalRead(2);
+    return !digitalRead(pin_number);
 }
 
-void loop() {
+void loop() 
+{
     delay(BUTTON_INPUT_DELAY_MS);
-    if (button_pushed() && !note)
-    {
-      noteOn(MIDI_CHANNEL, NOTE, MAX_VELOCITY); 
-      note = true;
-    }
-    else if (!button_pushed() && note)
-    {
-      note = false;
-    }
+    handle_button_pins();
+    //handle_analog_pin();
 }
 
-void noteOn(byte channel, byte pitch, byte velocity)
+void handle_button_pins()
 {
-    // 0x90 is the first of 16 note on channels. Subtract one to go from MIDI's 1-16 channels to 0-15
-    //channel += 0x90 - 1;
-  
-    // Ensure we're between channels 1 and 16 for a note on message
-    //if (channel >= 0x90 && channel <= 0x9F)
-    Serial.write(channel);
-    Serial.write(pitch);
-    Serial.write(velocity);
+    for (int i = 0; i < BUTTON_COUNT; i++)
+    {
+        if (button_pushed(button_pin[i]) && !event_handled[i])
+        {
+            sendNote(MIDI_CHANNEL+i, button_note[i], MAX_VELOCITY);
+            event_handled[i] = true;
+        }
+        else if (!button_pushed(button_pin[i]) && event_handled[i])
+        {
+            event_handled[i] = false;
+        }
+    }  
+}
+
+void handle_analog_pin()
+{
+    int analog_value = analogRead(ANALOG_PIN);
+    analog_value = map(analog_value, 0, 1023, 0, 127);
+    analog_value = constrain(analog_value, 0, 127);
+
+    if (abs(analog_value - last_analog_value) > 4)
+    {
+        sendNote(ANALOG_CHANNEL, 86, analog_value);
+        last_analog_value = analog_value;
+    }
+
+}
+
+void sendNote(int channel, int note, int velocity)
+{
+  Serial.write(channel);
+  Serial.write(note);
+  Serial.write(velocity);
 }
 
